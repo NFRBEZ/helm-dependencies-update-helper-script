@@ -1,0 +1,58 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta1
+kind: HelmRepository
+metadata:
+  name: kubecost
+  namespace: kubecost
+spec:
+  interval: 1h0m0s
+  url: https://kubecost.github.io/cost-analyzer/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kubecost
+  namespace: kubecost
+spec:
+  releaseName: kubecost
+  interval: 1h0m0s
+  chart:
+    spec:
+      version: 1.106.1
+      chart: cost-analyzer
+      sourceRef:
+        kind: HelmRepository
+        name: kubecost
+  values:
+    global:
+      podAnnotations:
+        ad.datadoghq.com/cost-model.check_names: '["openmetrics"]'
+        ad.datadoghq.com/cost-model.init_configs: '[{}]'
+        ad.datadoghq.com/cost-model.instances: '[{"prometheus_url": "http://kubecost-cost-analyzer.kubecost.svc.cluster.local:9003/metrics","namespace" : "inix", "metrics": ["node_total_hourly_cost", "node_cpu_hourly_cost", "node_ram_hourly_cost", "pv_hourly_cost"]}]'
+      prometheus:
+        enabled: false
+        fqdn: http://kube-prometheus-stack-prometheus.prometheus.svc.cluster.local:9090
+      grafana:
+        enabled: false
+        domainName: http://inix-grafana.pp.dktapp.cloud
+        proxy: false
+    kubecostFrontend:
+      api:
+        fqdn: localhost:9001
+      model:
+        fqdn: localhost:9003
+    ingress:
+      enabled: true
+      annotations:
+        kubernetes.io/ingress.class: nginx
+      hosts:
+        - ${hosts}
+      networkPolicy:
+        enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: "kube-prometheus-stack"
+    prometheusRule:
+      enabled: true
+      additionalLabels:
+        release: "kube-prometheus-stack"
