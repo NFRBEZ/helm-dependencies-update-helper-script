@@ -16,7 +16,7 @@ spec:
   releaseName: datadog-agent
   chart:
     spec:
-      version: 3.6.0
+      version: 3.36.3
       chart: datadog
       sourceRef:
         kind: HelmRepository
