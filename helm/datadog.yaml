@@ -1,0 +1,114 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta1
+kind: HelmRepository
+metadata:
+  name: datadog
+  namespace: datadog
+spec:
+  interval: 1h0m0s
+  url: https://helm.datadoghq.com
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: datadog-agent
+  namespace: datadog
+spec:
+  releaseName: datadog-agent
+  chart:
+    spec:
+      version: 3.6.0
+      chart: datadog
+      sourceRef:
+        kind: HelmRepository
+        name: datadog
+  interval: 1h0m0s
+  values:
+    hostNetwork: true
+    clusterAgent:
+      enabled: true
+      useHostNetwork: true
+      metricsProvider:
+        enabled: true
+        useDatadogMetrics: true
+      env:
+        - name: NO_PROXY
+          value: ${no_proxy}
+        - name: HTTPS_PROXY
+          value: ${proxy}
+        - name: HTTP_PROXY
+          value: ${proxy}
+    datadog:
+      apiKeyExistingSecret: datadog-secret
+      appKeyExistingSecret: datadog-secret
+      serviceMonitoring:
+        enabled: true
+      systemProbe:
+        enableDefaultKernelHeadersPaths: false
+      apm:
+        enabled: true
+      clusterName: ${cluster_name}
+      ignoreAutoConfig:
+        - elastic
+        - istio
+      dogstatsd:
+        port: 8125
+        useHostPort: true
+        nonLocalTraffic: true
+      helmCheck:
+        enabled: true
+      confd:
+        kube_apiserver_metrics.yaml: "init_config:\ninstances:  \n- prometheus_url: https://kubernetes.default/metrics\n  bearer_token_path: /var/run/secrets/kubernetes.io/serviceaccount/token\n  tls_ca_cert: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\n  skip_proxy: true\n  metric_patterns:\n    include:\n    - apiserver_request_total          "
+      dd_url: https://app.datadoghq.eu
+      env:
+        - name: DD_APM_IGNORE_RESOURCES
+          value: GET /actuator, GET /v1/ping, (GET|POST) /swagger-ui, GET /v3/api-docs
+        - name: NO_PROXY
+          value: ${no_proxy}
+        - name: HTTPS_PROXY
+          value: ${proxy}
+        - name: HTTP_PROXY
+          value: ${proxy}
+        - name: DD_APM_IGNORE_RESOURCES
+          value: GET /actuator, GET /v1/ping, (GET|POST) /swagger-ui, GET /v3/api-docs
+        - name: DD_EXTERNAL_METRICS_PROVIDER_ENABLED
+          value: "true"
+        - name: DD_EXTERNAL_METRICS_PROVIDER_USE_DATADOGMETRIC_CRD
+          value: "true"
+      kubeStateMetricsEnabled: false
+      logs:
+        containerCollectAll: true
+        enabled: true
+      nodeLabelsAsTags:
+        '*': '%%label%%'
+      orchestratorExplorer:
+        enabled: true
+      processAgent:
+        enabled: true
+      site: datadoghq.eu
+    agents:
+      enabled: true
+      useHostNetwork: true
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+    kube-state-metrics:
+      containerSecurityContext:
+        runAsNonRoot: true
+      resources:
+        limits:
+          memory: 300Mi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      securityContext:
+        enabled: true
+        fsGroup: 65534
+        runAsGroup: 65534
+        runAsUser: 65534
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
