@@ -17,7 +17,7 @@ spec:
   interval: 1h0m0s
   chart:
     spec:
-      version: 1.98.0
+      version: 1.106.1
       chart: cost-analyzer
       sourceRef:
         kind: HelmRepository
