@@ -80,8 +80,8 @@ do
                 # Delete the temporary files
                 rm old_values.yaml new_values.yaml diff_result.txt pr.txt
                 
-                # Replace the old version with the new version in the Chart.yaml file using sed
-                release_name=$release_name current_version=$current_version yq -i 'select(.kind == "HelmRelease" and .spec.releaseName == env(release_name)).spec.chart.spec.version = env(current_version)' $file
+                # Replace the old version with the new version 
+                yq -i "select(.kind == \"HelmRelease\" and .spec.releaseName == \"$release_name\").spec.chart.spec.version = \"$current_version\"" $file
                 
                 if [ !$DRY_RUN ]; then
                     # Cleaning old branch existing
