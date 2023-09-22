@@ -3,8 +3,25 @@
 set -eo pipefail
 
 BRANCH=main
-FORCE=false
+FORCE=""
+DRY_RUN=true
 MANIFEST_LOCATION=helm
+
+# Load all repo before looping over manifests
+repositories=$(yq ea '[select(.kind == "HelmRepository") | {"name": .metadata.name, "url": .spec.url}]' $MANIFEST_LOCATION/*.yaml)
+repositories_count=$(echo "$repositories" | yq '. | length - 1')
+
+# If no HelmRepository found, abort script
+if [ $repositories_count -le 0 ] ; then
+  echo "Unable to found any HelmRepository in manifest directory. Aborting"
+  exit -1
+fi
+
+for index in $(seq 0 $repositories_count); do
+  repo_name=$(echo "$repositories" | yq ".$index.name")
+  repo_url=$(echo "$repositories" | yq ".$index.url")
+  helm repo add $repo_name $repo_url
+done
 
 for file in $(find $MANIFEST_LOCATION -name '*.yml' -or -name '*.yaml'); 
 do 
@@ -12,35 +29,25 @@ do
     name=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.releaseName' $file)
 
     # Read Helm dependencies
-    helm_repo_ref=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.chart.spec.sourceRef.name' $file)
+    repo_name=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.chart.spec.sourceRef.name' $file)
     chart=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.chart.spec.chart' $file)
     version=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.chart.spec.version' $file)
 
-    repo_name=$(yq e 'select(.kind == "HelmRepository").metadata.name' $file)
-    repo_url=$(yq e 'select(.kind == "HelmRepository").spec.url' $file)
-
     # Select latest release of Helm chart
-    helm repo add $repo_name $repo_url
-    helm search repo -r "\v$repo_name/$chart\v" -l -o yaml | yq e 'map(select(key==0)).0' > tmp.txt
-    current_version=$(yq e '.version' tmp.txt)
-    current_app_version=$(echo $helm_latest | yq e '.app_version' tmp.txt)
-    rm -rf tmp.txt
+    helm_latest=$(helm search repo -r "\v$repo_name/$chart\v" -l -o yaml | yq e 'map(select(key==0)).0')
+    current_version=$(echo "$helm_latest" | yq e '.version')
+    current_app_version=$(echo "$helm_latest" | yq e '.app_version')
 
     # Sanitize the repo name
     sanitized_name=$(echo $repo_name | tr -d ' ' | tr '/' '-')
-
-    # Output
-    echo "Name: $name"
-    echo "Version in HelmRelease: $version"
-    echo "Current Version: $current_version"
 
     # If there's a difference between the versions
     if [ "$version" != "$current_version" ]; then
         echo "Found update for $name ($version -> $current_version)"
 
         # If a PR with this update exist and has been closed, do not recreate it unless script execution enforced it
-        if [ $(gh pr list -H update-helm-$sanitized_name-$current_version -s closed |wc -l) -gt 0 && !$FORCE]; then
-            echo "Found a closed PR for $name ($version -> $current_version). To enforce update, please run the script with a FORCE flag set to true"
+        if [[ $(gh pr list -H update-helm-$sanitized_name-$current_version -s closed | wc -l) -gt 0 && -z "$FORCE" ]]; then
+            echo "Found a closed PR for $name ($version -> $current_version). To enforce update, please run the script with a FORCE variable defined"
             continue
         fi
 
@@ -65,26 +72,30 @@ do
             # Replace the old version with the new version in the Chart.yaml file using sed
             name=$name current_version=$current_version yq -i 'select(.kind == "HelmRelease" and .spec.releaseName == env(name)).spec.chart.spec.version = env(current_version)' $file
             
-            # Cleaning old branch existing
-            if [ $(git branch -r --list "origin/update-helm-$sanitized_name-*") ]; then
-                echo "There is pending branch for $name"
-                for existing_branch in $(git branch -r --list "origin/update-helm-$sanitized_name-*"); 
-                do 
-                echo "Found outdated update branch which propose update to ${existing_branch##*-}, removing it"
-                [[ ${existing_branch##*-} != $current_version ]] && git push -d origin update-helm-$sanitized_name-${existing_branch##*-}
-                done
+            if [ !$DRY_RUN ]; then
+                # Cleaning old branch existing
+                if [ $(git branch -r --list "origin/update-helm-$sanitized_name-*") ]; then
+                    echo "There is pending branch for $name"
+                    for existing_branch in $(git branch -r --list "origin/update-helm-$sanitized_name-*"); 
+                    do 
+                    echo "Found outdated update branch which propose update to ${existing_branch##*-}, removing it"
+                    [[ ${existing_branch##*-} != $current_version ]] && git push -d origin update-helm-$sanitized_name-${existing_branch##*-}
+                    done
+                fi
+
+                # Create a new branch for this change
+                git checkout -b update-helm-$sanitized_name-$current_version
+                git add "$file"
+                git commit -m "Update $name version from $version to $current_version"
+                git push origin update-helm-$sanitized_name-$current_version
+
+                # Create a GitHub Pull Request
+                gh pr create --title "Update $name version from $version to $current_version" --body "$pr_body" --base main --head update-helm-$sanitized_name-$current_version || true
+                
+                git checkout $BRANCH
+            else
+                echo "DRY RUN EXECUTION. Aborting"
             fi
-
-            # Create a new branch for this change
-            git checkout -b update-helm-$sanitized_name-$current_version
-            git add "$file"
-            git commit -m "Update $name version from $version to $current_version"
-            git push origin update-helm-$sanitized_name-$current_version
-
-            # Create a GitHub Pull Request
-            gh pr create --title "Update $name version from $version to $current_version" --body "$pr_body" --base main --head update-helm-$sanitized_name-$current_version || true
-            
-            git checkout $BRANCH
         else
             echo "Branch already exists. Checking out to the existing branch." || true
         fi
