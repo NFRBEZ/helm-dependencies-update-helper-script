@@ -38,6 +38,11 @@ do
         repo_name=$(echo "$releases" | yq ".$index.repoName")
         chart=$(echo "$releases" | yq ".$index.chart")
         version=$(echo "$releases" | yq ".$index.version")
+
+        if [ $(echo "$repositories" | yq ".[] | select(.name == \"$repo_name\").name" | wc -l) -lt 1 ] ; then
+            echo "HelmRepository \"$repo_name\" not found in manifest directory. Skipping for release $release_name"
+            continue
+        fi
     
         # Select latest release of Helm chart
         helm_latest=$(helm search repo -r "\v$repo_name/$chart\v" -l -o yaml | yq e 'map(select(key==0)).0')
