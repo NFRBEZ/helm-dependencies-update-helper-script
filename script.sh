@@ -3,6 +3,7 @@
 set -eo pipefail
 
 BRANCH=main
+FORCE=false
 
 for file in $(find helm -name '*.yml' -or -name '*.yaml'); 
 do 
@@ -34,8 +35,16 @@ do
 
     # If there's a difference between the versions
     if [ "$version" != "$current_version" ]; then
+        echo "Found update for $name ($version -> $current_version)"
+
+        # If a PR with this update exist and has been closed, do not recreate it unless script execution enforced it
+        if [ $(gh pr list -H update-helm-$sanitized_name-$current_version -s closed |wc -l) -gt 0 && !$FORCE]; then
+            echo "Found a closed PR for $name ($version -> $current_version). To enforce update, please run the script with a FORCE flag set to true"
+            continue
+        fi
+
+        # If there is no existing branch for this version, create the update
         if [ ! $(git branch -r --list origin/update-helm-$sanitized_name-$current_version) ]; then
-            echo "There's a difference between the charts versions."
             # Get new packages values
             helm show values $repo_name/$chart --version $current_version > new_values.yaml
             helm show values $repo_name/$chart --version $version > old_values.yaml
@@ -78,8 +87,7 @@ do
         else
             echo "Branch already exists. Checking out to the existing branch." || true
         fi
-    #
     else
-        echo "There's no difference between the versions."
+        echo "$name is up to date ($version == $current_version)"
     fi
 done
