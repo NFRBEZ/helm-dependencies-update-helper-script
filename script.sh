@@ -4,8 +4,9 @@ set -eo pipefail
 
 BRANCH=main
 FORCE=false
+MANIFEST_LOCATION=helm
 
-for file in $(find helm -name '*.yml' -or -name '*.yaml'); 
+for file in $(find $MANIFEST_LOCATION -name '*.yml' -or -name '*.yaml'); 
 do 
     # Name of the dependency
     name=$(yq e 'select(.kind == "HelmRelease" and .spec.chart.spec.sourceRef.kind == "HelmRepository").spec.releaseName' $file)
