@@ -8,7 +8,7 @@ DRY_RUN=false
 
 help()
 {
-    echo "helmkit 
+    echo "revhelm.sh
   Find update for HelmRelease and create Pull Request on repository
     
 Options:
