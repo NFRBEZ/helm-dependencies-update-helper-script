@@ -118,7 +118,7 @@ do
 
             # If a PR with this update exist and has been closed, do not recreate it unless script execution enforced it
             if [[ $(gh pr list -H update-helm-$sanitized_name-$current_version -s closed | wc -l) -gt 0 && -z "$FORCE" ]]; then
-                echo "Found a closed PR for $release_name ($version -> $current_version). To enforce update, please run the script with a FORCE variable defined"
+                echo "Found a closed PR for $release_name ($version -> $current_version). To enforce update, please rerun revhelm with option -f"
                 continue
             fi
 
@@ -165,7 +165,7 @@ do
                     
                     git checkout $BRANCH
                 else
-                    echo "DRY RUN EXECUTION. Aborting"
+                    echo "Dry run execution. Aborting"
                 fi
             else
                 echo "Branch already exists. Checking out to the existing branch." || true
