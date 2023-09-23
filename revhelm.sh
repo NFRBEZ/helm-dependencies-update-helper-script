@@ -68,6 +68,8 @@ fi
 
 MANIFEST_LOCATION=$1
 
+git checkout $BRANCH >> /dev/null
+
 # Load all repo before looping over manifests
 repositories=$(yq ea '[select(.kind == "HelmRepository") | {"name": .metadata.name, "url": .spec.url}]' $MANIFEST_LOCATION/*.yaml)
 repositories_count=$(echo "$repositories" | yq '. | length - 1')
@@ -119,7 +121,7 @@ do
 
             # If a PR with this update exist and has been closed, do not recreate it unless script execution enforced it
             if [[ $(gh pr list -H update-helm-$sanitized_name-$current_version -s closed | wc -l) -gt 0 && -z "$FORCE" ]]; then
-                echo "Found a closed PR for $release_name ($version -> $current_version). To enforce update, please rerun revhelm with option -f"
+                echo "Found a closed PR for $release_name ($version -> $current_version). To enforce update, please run revhelm with option -f"
                 continue
             fi
 
