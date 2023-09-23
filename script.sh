@@ -4,8 +4,68 @@ set -eo pipefail
 
 BRANCH=main
 FORCE=""
-DRY_RUN=true
-MANIFEST_LOCATION=helm
+DRY_RUN=false
+
+help()
+{
+    echo "helmkit 
+  Find update for HelmRelease and create Pull Request on repository
+    
+Options:
+    ( -b | --branch )        The branch from which start update branch
+    ( -f | --force )         Enforce creation of update branch when a closed PR has been found for version
+    ( -d | --dry-run )       Dry-run execution
+    ( -h | --help )          Show help"
+    exit 2
+}
+
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -b | --branch )
+      if [ -z "$2" ]; then
+        echo "No value found for option branch"
+        help
+      else
+        BRANCH="$2"
+        shift 2
+      fi
+      ;;
+    -f | --force )
+      FORCE="True"
+      shift
+      ;;
+    -d | --dry-run )
+      DRY_RUN=true
+      shift
+      ;;
+    -h | --help )
+      help
+      ;;
+    --)
+      shift;
+      break
+      ;;
+    -*|--*)
+      echo "Unexpected option: $1"
+      help
+      ;;
+    * )
+      POSITIONAL_ARGS+=("$1") # save positional arg
+      shift # past argument
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
+
+if [ $# -lt 1 ]; then
+    echo "ERROR: You should specify a path of manifest on which lookup for HelmRelease / HelmRepository"
+    exit 1
+fi
+
+MANIFEST_LOCATION=$1
 
 # Load all repo before looping over manifests
 repositories=$(yq ea '[select(.kind == "HelmRepository") | {"name": .metadata.name, "url": .spec.url}]' $MANIFEST_LOCATION/*.yaml)
