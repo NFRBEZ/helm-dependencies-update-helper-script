@@ -8,14 +8,15 @@ DRY_RUN=false
 
 help()
 {
-    echo "revhelm.sh
+    echo "
+revhelm.sh
   Find update for HelmRelease and create Pull Request on repository
     
 Options:
-    ( -b | --branch )        The branch from which start update branch
-    ( -f | --force )         Enforce creation of update branch when a closed PR has been found for version
-    ( -d | --dry-run )       Dry-run execution
-    ( -h | --help )          Show help"
+    -b (--branch)        The branch from which start update branch
+    -f (--force)         Enforce creation of update branch when a closed PR has been found for version
+    -d (--dry-run)       Dry-run execution
+    -h (--help)          Show help"
     exit 2
 }
 
